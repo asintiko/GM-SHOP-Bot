@@ -51,6 +51,7 @@ class WeeklyTopService:
                     cm.user_id,
                     u.first_name,
                     u.username,
+                    u.disable_weekly_top_mention,
                     cm.messages_week,
                     cm.karma,
                     cm.replies_received_week,
@@ -80,6 +81,7 @@ class WeeklyTopService:
                 user_id,
                 first_name,
                 username,
+                disable_weekly_top_mention,
                 messages_week,
                 karma,
                 score
@@ -98,6 +100,7 @@ class WeeklyTopService:
                 'user_id': row['user_id'],
                 'first_name': row['first_name'],
                 'username': row['username'],
+                'disable_mention': row.get('disable_weekly_top_mention', False),
                 'messages': row['messages_week'],
                 'karma': row['karma'],
                 'score': round(float(row['score']), 2)
@@ -149,8 +152,21 @@ class WeeklyTopService:
         for user in top_users:
             rank = user['rank']
             medal = medals[rank - 1] if rank <= 3 else f"{rank}."
+
+            # Use silent link if user disabled mentions
+            if user.get('disable_mention', False):
+                # Silent link - doesn't notify the user
+                if user.get('username'):
+                    user_link = f'<a href="https://t.me/{user["username"]}">{user["first_name"]}</a>'
+                else:
+                    # Fallback to just name if no username
+                    user_link = user["first_name"]
+            else:
+                # Regular mention with notification
+                user_link = f'<a href="tg://user?id={user["user_id"]}">{user["first_name"]}</a>'
+
             message_text += (
-                f'{medal} <a href="tg://user?id={user["user_id"]}">{user["first_name"]}</a> '
+                f'{medal} {user_link} '
                 f'— {user["score"]} очков\n'
             )
 

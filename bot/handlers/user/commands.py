@@ -4,7 +4,7 @@ User commands handlers (/rules, /karma, /profile, etc.)
 
 from aiogram import Router, F
 from aiogram.filters import Command
-from aiogram.types import Message, FSInputFile
+from aiogram.types import Message, FSInputFile, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 import structlog
 import os
 
@@ -130,6 +130,13 @@ async def cmd_profile(message: Message):
     # Get display name
     display_name = await models.get_display_name(chat_id, user_id)
 
+    # Get user settings
+    user_data = await models.db.fetchrow(
+        "SELECT disable_weekly_top_mention FROM users WHERE user_id = $1",
+        user_id
+    )
+    disable_mention = user_data.get('disable_weekly_top_mention', False) if user_data else False
+
     # Check if user has nickname
     nickname = member.get('nickname')
     nickname_text = f"\n🏷 Прозвище: <b>{nickname}</b>" if nickname else ""
@@ -141,24 +148,35 @@ async def cmd_profile(message: Message):
     else:
         joined_str = "Неизвестно"
 
+    # Status of notifications
+    notify_status = "🔕 Выключены" if disable_mention else "🔔 Включены"
+
     profile_text = f"""👤 <b>Профиль:</b> <a href="tg://user?id={user_id}">{display_name}</a>{nickname_text}
 
 📅 В чате с: <b>{joined_str}</b>
 💬 Сообщений за неделю: <b>{member.get('messages_week', 0)}</b>
 ⭐ Карма: <b>{member.get('karma', 0)}</b>
+
+⚙️ Уведомления в топе недели: <b>{notify_status}</b>
 """
+
+    # Create inline keyboard
+    button_text = "🔕 Выключить уведомления" if not disable_mention else "🔔 Включить уведомления"
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=button_text, callback_data=f"toggle_weekly_mention:{user_id}")]
+    ])
 
     # Send profile with photo
     try:
         if os.path.exists(PROFILE_PHOTO_PATH):
             photo = FSInputFile(PROFILE_PHOTO_PATH)
-            await message.answer_photo(photo=photo, caption=profile_text)
+            await message.answer_photo(photo=photo, caption=profile_text, reply_markup=keyboard)
         else:
-            await message.answer(profile_text)
+            await message.answer(profile_text, reply_markup=keyboard)
             logger.warning("profile_photo_not_found", path=PROFILE_PHOTO_PATH)
     except Exception as e:
         logger.error("failed_to_send_profile", error=str(e))
-        await message.answer(profile_text)
+        await message.answer(profile_text, reply_markup=keyboard)
 
 
 @router.message(Command("top"))
@@ -208,3 +226,85 @@ async def cmd_top(message: Message):
     except Exception as e:
         logger.error("failed_to_send_top", error=str(e))
         await message.answer(top_text)
+
+
+@router.callback_query(F.data.startswith("toggle_weekly_mention:"))
+async def callback_toggle_weekly_mention(callback: CallbackQuery):
+    """Toggle weekly top mention notification setting."""
+    # Extract user_id from callback data
+    user_id_from_data = int(callback.data.split(":")[1])
+
+    # Security check - only user themselves can toggle their setting
+    if callback.from_user.id != user_id_from_data:
+        await callback.answer("❌ Вы можете изменить только свои настройки!", show_alert=True)
+        return
+
+    user_id = callback.from_user.id
+
+    # Get current setting
+    user_data = await models.db.fetchrow(
+        "SELECT disable_weekly_top_mention FROM users WHERE user_id = $1",
+        user_id
+    )
+
+    if user_data:
+        # Toggle setting
+        current_value = user_data.get('disable_weekly_top_mention', False)
+        new_value = not current_value
+
+        await models.db.execute(
+            "UPDATE users SET disable_weekly_top_mention = $1 WHERE user_id = $2",
+            new_value, user_id
+        )
+
+        # Send confirmation
+        if new_value:
+            await callback.answer("🔕 Уведомления в топе недели выключены", show_alert=True)
+        else:
+            await callback.answer("🔔 Уведомления в топе недели включены", show_alert=True)
+
+        logger.info("weekly_mention_toggled", user_id=user_id, new_value=new_value)
+
+        # Update message
+        # Get updated data
+        chat_id = callback.message.chat.id
+        member = await models.get_or_create_chat_member(chat_id, user_id)
+        display_name = await models.get_display_name(chat_id, user_id)
+
+        nickname = member.get('nickname')
+        nickname_text = f"\n🏷 Прозвище: <b>{nickname}</b>" if nickname else ""
+
+        joined_at = member.get("joined_at")
+        if joined_at:
+            joined_str = joined_at.strftime("%d.%m.%Y")
+        else:
+            joined_str = "Неизвестно"
+
+        notify_status = "🔕 Выключены" if new_value else "🔔 Включены"
+
+        profile_text = f"""👤 <b>Профиль:</b> <a href="tg://user?id={user_id}">{display_name}</a>{nickname_text}
+
+📅 В чате с: <b>{joined_str}</b>
+💬 Сообщений за неделю: <b>{member.get('messages_week', 0)}</b>
+⭐ Карма: <b>{member.get('karma', 0)}</b>
+
+⚙️ Уведомления в топе недели: <b>{notify_status}</b>
+"""
+
+        # Update keyboard
+        button_text = "🔕 Выключить уведомления" if not new_value else "🔔 Включить уведомления"
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=button_text, callback_data=f"toggle_weekly_mention:{user_id}")]
+        ])
+
+        try:
+            await callback.message.edit_caption(caption=profile_text, reply_markup=keyboard)
+        except Exception:
+            # If it's a text message, not a photo
+            try:
+                await callback.message.edit_text(text=profile_text, reply_markup=keyboard)
+            except Exception as e:
+                logger.error("failed_to_update_profile_message", error=str(e))
+
+    else:
+        await callback.answer("❌ Ошибка: пользователь не найден", show_alert=True)
