@@ -120,7 +120,8 @@ DEFAULT_CHAT_SETTINGS = {
         "enabled": True,
         "cooldown_hours": 12,
         "daily_negative_limit": -3,
-        "weekly_bonus_weight": 2
+        "weekly_bonus_weight": 2,
+        "notify_on_change": True  # Send notification in chat when karma changes
     },
 
     # Warns/escalation
@@ -150,7 +151,11 @@ DEFAULT_CHAT_SETTINGS = {
             "🥇 Донат на 500 руб",
             "🥈 Донат на 300 руб",
             "🥉 Донат на 200 руб"
-        ]
+        ],
+        "notify_start": True,  # Send notification when weekly competition starts
+        "notify_end": True,  # Send notification when weekly competition ends
+        "start_message": "🏁 <b>Новый конкурс топа недели начался!</b>\n\nУчаствуйте в жизни чата, набирайте карму и выигрывайте призы! 🎁",
+        "end_message": "🏆 <b>Конкурс топа недели завершен!</b>\n\nПобедители будут объявлены в ближайшее время!"
     },
 
     # Marriages

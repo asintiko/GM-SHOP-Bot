@@ -115,6 +115,7 @@ async def main():
     from bot.handlers.private.rules_editor import router as rules_editor_router
     from bot.handlers.private.welcome_editor import router as welcome_editor_router
     from bot.handlers.private.giveaway_wizard import router as giveaway_wizard_router
+    from bot.handlers.private.karma_manager import router as karma_manager_router
     from bot.handlers.moderation.commands import router as moderation_router
     from bot.handlers.user.commands import router as user_commands_router
     from bot.handlers.user.help import router as help_router
@@ -129,6 +130,7 @@ async def main():
     dp.include_router(rules_editor_router)
     dp.include_router(welcome_editor_router)
     dp.include_router(giveaway_wizard_router)
+    dp.include_router(karma_manager_router)  # Karma management through PM
 
     # Group handlers
     dp.include_router(moderation_router)  # Moderation commands

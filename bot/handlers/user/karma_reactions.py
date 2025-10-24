@@ -134,12 +134,37 @@ async def handle_reaction(event: MessageReactionUpdated, bot: Bot):
         reason=reason
     )
 
+    # Get new karma value
+    new_karma = await models.get_user_karma(chat_id, to_user_id)
+
+    # Check if notifications are enabled
+    if settings.get("karma", {}).get("notify_on_change", True):
+        # Get user display names
+        from_user_name = await models.get_display_name(chat_id, from_user_id)
+        to_user_name = await models.get_display_name(chat_id, to_user_id)
+
+        # Send notification to chat
+        emoji = "👍" if karma_delta > 0 else "👎"
+        action = "повысили" if karma_delta > 0 else "понизили"
+
+        notification_text = (
+            f"{emoji} <b>{action.capitalize()}!</b>\n\n"
+            f"<b>{from_user_name}</b> {action} рейтинг пользователя <b>{to_user_name}</b>.\n"
+            f"Теперь его рейтинг: <b>{new_karma}</b> ❤️"
+        )
+
+        try:
+            await bot.send_message(chat_id, notification_text)
+        except Exception as e:
+            logger.error("failed_to_send_karma_notification", error=str(e))
+
     logger.info(
         "karma_by_reaction",
         chat_id=chat_id,
         from_user=from_user_id,
         to_user=to_user_id,
-        delta=karma_delta
+        delta=karma_delta,
+        new_karma=new_karma
     )
 
 
