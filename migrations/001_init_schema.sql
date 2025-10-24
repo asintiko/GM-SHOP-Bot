@@ -106,7 +106,7 @@ CREATE TABLE IF NOT EXISTS karma_events (
   chat_id BIGINT,
   from_user_id BIGINT,
   to_user_id BIGINT,
-  delta SMALLINT CHECK (delta IN (-1, 1)),
+  delta SMALLINT CHECK (delta BETWEEN -10000 AND 10000),
   reason TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   FOREIGN KEY (chat_id) REFERENCES chats(chat_id) ON DELETE CASCADE,

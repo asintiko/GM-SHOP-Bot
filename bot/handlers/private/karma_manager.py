@@ -121,6 +121,16 @@ async def process_karma_amount(message: Message, state: FSMContext, bot: Bot):
     """Process karma amount and update."""
     try:
         amount = int(message.text.strip())
+
+        # Validate amount range
+        if amount == 0:
+            await message.answer("❌ Значение не может быть нулевым. Попробуйте снова:")
+            return
+
+        if amount < -10000 or amount > 10000:
+            await message.answer("❌ Значение должно быть в диапазоне от -10000 до +10000. Попробуйте снова:")
+            return
+
         data = await state.get_data()
         
         chat_id = data['selected_chat_id']
