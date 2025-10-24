@@ -10,7 +10,6 @@ from aiogram.fsm.state import State, StatesGroup
 import structlog
 
 from bot.database import models
-from bot.handlers.private.states import Form
 
 logger = structlog.get_logger(__name__)
 router = Router(name="karma_manager")
