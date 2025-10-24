@@ -24,31 +24,37 @@ class KarmaForm(StatesGroup):
 
 @router.message(Command("addkarma"))
 @router.message(F.text.lower() == "добавить карму")
-async def cmd_add_karma(message: Message, state: FSMContext):
+async def cmd_add_karma(message: Message, state: FSMContext, bot: Bot):
     """Start karma addition process."""
     user_id = message.from_user.id
-    
-    # Get list of chats where user is admin
-    chats = await models.db.fetch(
-        """
-        SELECT c.chat_id, c.title
-        FROM chats c
-        JOIN staff s ON c.chat_id = s.chat_id
-        WHERE s.user_id = $1 AND s.role IN ('admin', 'owner')
-        ORDER BY c.title
-        """,
-        user_id
-    )
-    
-    if not chats:
+
+    # Get all chats from database
+    all_chats = await models.db.fetch("SELECT chat_id, title FROM chats ORDER BY title")
+
+    # Check user permissions in each chat via Telegram API
+    admin_chats = []
+    for chat in all_chats:
+        try:
+            # Get user's status in this chat via Telegram API
+            member = await bot.get_chat_member(chat['chat_id'], user_id)
+
+            # Check if user is admin or creator
+            if member.status in ['administrator', 'creator']:
+                admin_chats.append(chat)
+        except Exception as e:
+            # User might not be in the chat or chat doesn't exist anymore
+            logger.debug("failed_to_check_admin_status", chat_id=chat['chat_id'], user_id=user_id, error=str(e))
+            continue
+
+    if not admin_chats:
         await message.answer("❌ Вы не являетесь администратором ни в одном чате.")
         return
-    
+
     # Show chat selection
-    chat_list = "\n".join([f"{i+1}. {chat['title']}" for i, chat in enumerate(chats)])
-    await state.update_data(chats=chats)
+    chat_list = "\n".join([f"{i+1}. {chat['title']}" for i, chat in enumerate(admin_chats)])
+    await state.update_data(chats=admin_chats)
     await state.set_state(KarmaForm.waiting_for_chat)
-    
+
     await message.answer(
         f"<b>📊 Управление кармой</b>\n\n"
         f"Выберите чат (отправьте номер):\n\n{chat_list}"
@@ -126,9 +132,18 @@ async def process_karma_amount(message: Message, state: FSMContext, bot: Bot):
         # Get or create chat and member
         await models.get_or_create_chat(chat_id, chat_title)
         await models.get_or_create_chat_member(chat_id, target_user_id)
-        
-        # Update karma
-        new_karma = await models.update_karma(chat_id, target_user_id, amount)
+
+        # Update karma via event
+        await models.add_karma_event(
+            chat_id,
+            admin_id,
+            target_user_id,
+            amount,
+            reason="admin_adjustment"
+        )
+
+        # Get new karma value
+        new_karma = await models.get_karma(chat_id, target_user_id)
         
         # Log to admin
         await message.answer(
@@ -161,7 +176,7 @@ async def process_karma_amount(message: Message, state: FSMContext, bot: Bot):
 
 @router.message(Command("removekarma"))
 @router.message(F.text.lower() == "убавить карму")
-async def cmd_remove_karma(message: Message, state: FSMContext):
+async def cmd_remove_karma(message: Message, state: FSMContext, bot: Bot):
     """Shortcut for removing karma."""
-    await cmd_add_karma(message, state)
+    await cmd_add_karma(message, state, bot)
     await message.answer("💡 <i>Отправьте отрицательное число для уменьшения кармы</i>")

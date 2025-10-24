@@ -135,7 +135,7 @@ async def handle_reaction(event: MessageReactionUpdated, bot: Bot):
     )
 
     # Get new karma value
-    new_karma = await models.get_user_karma(chat_id, to_user_id)
+    new_karma = await models.get_karma(chat_id, to_user_id)
 
     # Check if notifications are enabled
     if settings.get("karma", {}).get("notify_on_change", True):
